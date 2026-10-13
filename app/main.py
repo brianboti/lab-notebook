@@ -1,7 +1,6 @@
 """Lab Notebook: pages for people and a JSON API for programs, on one FastAPI service."""
 
 import logging
-import os
 import re
 import threading
 import time
@@ -158,8 +157,6 @@ def safe_filename(name: str) -> str:
 @app.get("/health")
 def health():
     """Readiness without side effects: no database, bucket or topic call that could fail or cost."""
-    if os.environ.get("K_SERVICE"):  # SCENARIO: a bug that only shows on Cloud Run (K_SERVICE is set there)
-        return JSONResponse({"status": "broken"}, status_code=503)
     return {"status": "ok", "version": __version__}
 
 
