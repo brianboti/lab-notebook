@@ -13,7 +13,7 @@ def test_health_answers_without_a_database(monkeypatch):
     backends.reset()
     with TestClient(app) as client:
         response = client.get("/health")
-    assert response.status_code == 200 and response.json()["status"] == "fine"
+    assert response.status_code == 200 and response.json()["status"] == "ok"
     assert db._engine is None  # the health check never created an engine
 
 
