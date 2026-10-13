@@ -13,7 +13,7 @@ env:
   APP_TITLE: Lab Notebook
   LOG_LEVEL: info
   MAX_UPLOAD_MB: "10"
-secrets: [API_KEY, MAIL_PASSWORD]
+secrets: [API_KEY]
 tests: required
 needs:
   buckets: [uploads]
