@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block page_title %}Who am I · {{ title }}{% endblock %}
+{% block content %}
+<h1>Who am I</h1>
+<dl>
+  <dt>You are</dt><dd>{{ info.user }}</dd>
+  <dt>Identified by</dt><dd>{{ info.how }}</dd>
+  <dt>Database</dt><dd>{{ info.database }}</dd>
+  <dt>Files</dt><dd>{{ info.storage }}</dd>
+  <dt>Events</dt><dd>{{ info.events }}</dd>
+  <dt>API key</dt><dd>{{ "configured" if info.api_key_configured else "not configured" }}</dd>
+  <dt>Version</dt><dd>{{ info.version }}</dd>
+</dl>
+{% endblock %}

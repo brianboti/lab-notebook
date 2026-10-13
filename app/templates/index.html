@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Dashboard</h1>
+<section class="cards">
+  <div class="card"><span class="number" data-stat="experiments">{{ stats.experiments }}</span>experiments</div>
+  <div class="card"><span class="number" data-stat="attachments">{{ stats.attachments }}</span>attachments</div>
+  <div class="card"><span class="number" data-stat="activity">{{ stats.activity }}</span>activity entries</div>
+</section>
+<p><button id="refresh-stats" type="button">Refresh numbers</button> <span id="refreshed" class="muted"></span></p>
+<h2>Recent experiments</h2>
+{% if recent %}
+<ul class="list">
+  {% for e in recent %}
+  <li><a href="/experiments/{{ e.id }}">{{ e.title }}</a> <span class="badge {{ e.status }}">{{ e.status }}</span> <span class="muted">by {{ e.owner }}</span></li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="muted">No experiments yet. <a href="/experiments/new">Start one</a>.</p>
+{% endif %}
+{% endblock %}

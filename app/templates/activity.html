@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block page_title %}Activity · {{ title }}{% endblock %}
+{% block content %}
+<h1>Activity</h1>
+<p class="muted">{{ received }} new event{{ "" if received == 1 else "s" }} read from the queue just now.</p>
+{% if items %}
+<ul class="list">
+  {% for item in items %}
+  <li><code>{{ item.kind }}</code> {{ item.detail }} <span class="muted">by {{ item.actor }} · {{ item.created_at.strftime("%Y-%m-%d %H:%M:%S") }}</span></li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="muted">No activity yet.</p>
+{% endif %}
+{% endblock %}

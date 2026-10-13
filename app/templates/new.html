@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block page_title %}New experiment · {{ title }}{% endblock %}
+{% block content %}
+<h1>New experiment</h1>
+<form class="stack" method="post" action="/experiments">
+  <label>Title <input name="title" required maxlength="200"></label>
+  <label>Notes <textarea name="description" rows="6"></textarea></label>
+  <button type="submit">Create</button>
+</form>
+{% endblock %}

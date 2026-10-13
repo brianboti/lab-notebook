@@ -1,0 +1,17 @@
+[project]
+name = "lab-notebook"
+version = "1.0.0"
+description = "Experiments, attachments and an activity feed for the lab, deployed by Lab Deploy"
+requires-python = ">=3.12"
+license = "MIT"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 140
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]

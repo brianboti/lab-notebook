@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block page_title %}Experiments · {{ title }}{% endblock %}
+{% block content %}
+<h1>Experiments</h1>
+<form class="search" method="get" action="/experiments">
+  <input name="q" value="{{ q }}" placeholder="Search titles and notes" aria-label="Search">
+  <select name="status" aria-label="Status">
+    <option value="">any status</option>
+    {% for s in statuses %}<option value="{{ s }}" {% if s == status %}selected{% endif %}>{{ s }}</option>{% endfor %}
+  </select>
+  <button type="submit">Search</button>
+</form>
+{% if experiments %}
+<table>
+  <thead><tr><th>#</th><th>Title</th><th>Status</th><th>Owner</th><th>Created</th></tr></thead>
+  <tbody>
+  {% for e in experiments %}
+    <tr>
+      <td>{{ e.id }}</td>
+      <td><a href="/experiments/{{ e.id }}">{{ e.title }}</a></td>
+      <td><span class="badge {{ e.status }}">{{ e.status }}</span></td>
+      <td>{{ e.owner }}</td>
+      <td class="muted">{{ e.created_at.strftime("%Y-%m-%d %H:%M") }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">Nothing found.</p>
+{% endif %}
+{% endblock %}
