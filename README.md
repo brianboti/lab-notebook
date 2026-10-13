@@ -52,3 +52,5 @@ uv pip compile requirements.txt --generate-hashes --python-version 3.12 --python
 
 Add a file under `migrations/versions/`. Keep each one compatible with the version still serving (add first, remove
 later), because the migration runs before the new version takes traffic and a rollback returns to the old code.
+
+Tested end to end on Lab Deploy staging (2026-10-13): onboarding, migrations, rollback, failures and cancel.
