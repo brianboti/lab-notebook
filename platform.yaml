@@ -7,13 +7,13 @@ resources: { cpu: 1, memory_mib: 512 }
 scaling: { minimum: 0, maximum: 2 }
 concurrency: 40
 timeout_seconds: 60
-exposure: public
+exposure: authenticated
 state: stateless
 env:
   APP_TITLE: Lab Notebook
   LOG_LEVEL: info
   MAX_UPLOAD_MB: "10"
-secrets: [API_KEY]
+secrets: [API_KEY, MAIL_PASSWORD]
 tests: required
 needs:
   buckets: [uploads]
