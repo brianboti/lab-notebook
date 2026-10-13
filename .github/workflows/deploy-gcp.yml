@@ -1,0 +1,344 @@
+name: Deploy GCP staging
+run-name: deploy-${{ inputs.plan_id }}
+on:
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        required: true
+        type: string
+      spec_hash:
+        required: true
+        type: string
+      plan_id:
+        required: true
+        type: string
+      target_json:
+        required: true
+        type: string
+      image_digest:
+        description: Reuse an already-attested image for this commit instead of building again (full digest reference)
+        required: false
+        default: ''
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: gcp-staging
+  cancel-in-progress: false
+  queue: max
+env:
+  COMMIT_SHA: ${{ inputs.commit_sha }}
+  SPEC_HASH: ${{ inputs.spec_hash }}
+  PLAN_ID: ${{ inputs.plan_id }}
+  TARGET_JSON: ${{ inputs.target_json }}
+  IMAGE_DIGEST_INPUT: ${{ inputs.image_digest }}
+jobs:
+  build:
+    # Skipped when the plan reuses an image this workflow already built and attested for the same commit.
+    if: inputs.image_digest == ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Validate dispatch inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$COMMIT_SHA" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$SPEC_HASH" =~ ^[a-f0-9]{64}$ ]]
+          [[ "$PLAN_ID" =~ ^[a-f0-9]{32}$ ]]
+          test "$GITHUB_REF" = "refs/heads/main"
+          # The commit must be the tip of main or already part of its history: never an unmerged branch.
+          if [ "$COMMIT_SHA" != "$GITHUB_SHA" ]; then
+            STATUS=$(gh api "repos/$GITHUB_REPOSITORY/compare/$COMMIT_SHA...$GITHUB_SHA" --jq .status)
+            [ "$STATUS" = "ahead" ] || [ "$STATUS" = "identical" ]
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.commit_sha }}
+          persist-credentials: false
+          path: app
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: brianboti/lab-deploy
+          ref: 76ad0291d1a5c76963b5c993dead239457be74cb
+          persist-credentials: false
+          path: platform
+          # For a private platform repo: read-only fine-grained token or App token.
+          token: ${{ secrets.PLATFORM_READ_TOKEN || github.token }}
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Install trusted platform dependencies
+        run: python -m pip install --require-hashes -r platform/requirements.lock
+      - name: Validate reviewed specification
+        env:
+          PYTHONPATH: ${{ github.workspace }}/platform
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          from labdeploy.models import parse_spec, spec_hash, enforce
+          spec = parse_spec(Path('app/platform.yaml').read_text())
+          enforce(spec)
+          assert spec_hash(spec) == os.environ['SPEC_HASH'], 'Spec hash mismatch'
+          PY
+      - name: Read the application's test policy
+        id: policy
+        env:
+          PYTHONPATH: ${{ github.workspace }}/platform
+        shell: bash
+        run: |
+          set -euo pipefail
+          TESTS=$(python -c 'from pathlib import Path; from labdeploy.models import parse_spec; print(parse_spec(Path("app/platform.yaml").read_text()).tests)')
+          [[ "$TESTS" =~ ^(required|none)$ ]]
+          echo "tests=$TESTS" >> "$GITHUB_OUTPUT"
+          [ "$TESTS" = "required" ] || echo "::warning::platform.yaml declares tests: none; no automated tests guard this release"
+      - name: Run unit tests
+        if: steps.policy.outputs.tests == 'required'
+        working-directory: app
+        run: |
+          set -euo pipefail
+          python -m venv .test-venv
+          if [ -f requirements.lock ]; then
+            .test-venv/bin/pip install --require-hashes -r requirements.lock
+          else
+            .test-venv/bin/pip install -r requirements.txt
+          fi
+          .test-venv/bin/pip install -r requirements-dev.txt
+          .test-venv/bin/python -m pytest
+      - name: Audit Python dependencies
+        working-directory: app
+        run: |
+          set -euo pipefail
+          python -m pip install --require-hashes -r ../platform/audit.lock
+          python -m pip_audit -r requirements.txt
+      - name: Build without cloud credentials
+        run: |
+          set -euo pipefail
+          docker build --platform linux/amd64 -t "lab-app:$COMMIT_SHA" app
+          mkdir -p bundle
+          docker save "lab-app:$COMMIT_SHA" -o bundle/image.tar
+          cp app/platform.yaml bundle/platform.yaml
+          sha256sum bundle/image.tar | cut -d' ' -f1 > bundle/image.sha256
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-bundle
+          path: bundle/
+          retention-days: 3
+          if-no-files-found: error
+  deploy:
+    needs: build
+    if: always() && needs.build.result != 'failure' && needs.build.result != 'cancelled'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    # GitHub records a deployment for this environment job; the URL below makes it show the released service.
+    environment:
+      name: staging
+      url: ${{ steps.release.outputs.url }}
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    env:
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      GCP_REGION: ${{ vars.GCP_REGION }}
+      SERVICE: ${{ vars.CLOUD_RUN_SERVICE }}
+      REGISTRY_NAME: ${{ vars.ARTIFACT_REPOSITORY }}
+      PROBE_SERVICE_ACCOUNT: ${{ vars.PROBE_SERVICE_ACCOUNT }}
+      DEPLOY_SERVICE_ACCOUNT: ${{ vars.DEPLOY_SERVICE_ACCOUNT }}
+      WIF_PROVIDER: ${{ vars.WIF_PROVIDER }}
+      RECOVERY_BUCKET: ${{ vars.RECOVERY_BUCKET }}
+      IAP_CLIENT_ID: ${{ vars.IAP_CLIENT_ID }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: brianboti/lab-deploy
+          ref: 76ad0291d1a5c76963b5c993dead239457be74cb
+          persist-credentials: false
+          path: platform
+          token: ${{ secrets.PLATFORM_READ_TOKEN || github.token }}
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --require-hashes -r platform/requirements.lock
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        if: inputs.image_digest == ''
+        with:
+          name: release-bundle
+          path: bundle
+      # Reuse: the reviewed configuration comes from the commit itself; the image was built and attested by an earlier run.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: inputs.image_digest != ''
+        with:
+          ref: ${{ inputs.commit_sha }}
+          persist-credentials: false
+          path: app
+      - name: Validate dispatch inputs for reuse
+        if: inputs.image_digest != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$COMMIT_SHA" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$SPEC_HASH" =~ ^[a-f0-9]{64}$ ]]
+          [[ "$PLAN_ID" =~ ^[a-f0-9]{32}$ ]]
+          test "$GITHUB_REF" = "refs/heads/main"
+          if [ "$COMMIT_SHA" != "$GITHUB_SHA" ]; then
+            STATUS=$(gh api "repos/$GITHUB_REPOSITORY/compare/$COMMIT_SHA...$GITHUB_SHA" --jq .status)
+            [ "$STATUS" = "ahead" ] || [ "$STATUS" = "identical" ]
+          fi
+          IMAGE="$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/$REGISTRY_NAME/$SERVICE"
+          [[ "$IMAGE_DIGEST_INPUT" =~ ^"$IMAGE"@sha256:[a-f0-9]{64}$ ]]
+          mkdir -p bundle && cp app/platform.yaml bundle/platform.yaml
+          echo "IMAGE_DIGEST=$IMAGE_DIGEST_INPUT" >> "$GITHUB_ENV"
+          echo "IMAGE_NAME=$IMAGE" >> "$GITHUB_ENV"
+          echo "IMAGE_SHA256=${IMAGE_DIGEST_INPUT##*@}" >> "$GITHUB_ENV"
+      - name: Validate artifact and deployment configuration
+        env:
+          PYTHONPATH: ${{ github.workspace }}/platform
+          REUSING_IMAGE: ${{ inputs.image_digest != '' }}
+        run: |
+          python - <<'PY'
+          import hashlib, os, re
+          from pathlib import Path
+          from labdeploy.models import parse_spec, spec_hash, enforce
+          from labdeploy.target import verify_target, environment_target
+          verify_target(os.environ['TARGET_JSON'], environment_target())
+          spec = parse_spec(Path('bundle/platform.yaml').read_text())
+          enforce(spec)
+          assert spec_hash(spec) == os.environ['SPEC_HASH']
+          assert spec.name == os.environ['SERVICE']
+          for name in ('GCP_PROJECT_ID', 'GCP_REGION', 'SERVICE', 'REGISTRY_NAME'):
+              assert re.fullmatch(r'[a-z][a-z0-9-]+', os.environ[name]), name
+          assert re.fullmatch(r'[a-z0-9-]+@[a-z0-9-]+\.iam\.gserviceaccount\.com', os.environ['PROBE_SERVICE_ACCOUNT'])
+          if os.environ['REUSING_IMAGE'] != 'true':
+              with open('bundle/image.tar', 'rb') as f:
+                  assert hashlib.file_digest(f, 'sha256').hexdigest() == Path('bundle/image.sha256').read_text().strip()
+          PY
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.DEPLOY_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
+      - name: Configure registry access
+        shell: bash
+        run: gcloud auth configure-docker "$GCP_REGION-docker.pkg.dev" --quiet
+      - name: Recover any interrupted previous release
+        env:
+          PYTHONPATH: ${{ github.workspace }}/platform
+          RECOVERY_ONLY: 'true'
+        run: python -m labdeploy.release
+      - name: Push image and resolve immutable digest
+        if: inputs.image_digest == ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker load -i bundle/image.tar
+          IMAGE="$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/$REGISTRY_NAME/$SERVICE"
+          docker tag "lab-app:$COMMIT_SHA" "$IMAGE:$COMMIT_SHA"
+          docker push "$IMAGE:$COMMIT_SHA"
+          # A second, immutable tag per release keeps the digest findable by plan id after the commit tag moves on a rebuild.
+          docker tag "lab-app:$COMMIT_SHA" "$IMAGE:release-$PLAN_ID"
+          docker push "$IMAGE:release-$PLAN_ID"
+          DIGEST=$(gcloud artifacts docker images describe "$IMAGE:$COMMIT_SHA" --format='value(image_summary.digest)')
+          [[ "$DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]
+          echo "IMAGE_DIGEST=$IMAGE@$DIGEST" >> "$GITHUB_ENV"
+          echo "IMAGE_NAME=$IMAGE" >> "$GITHUB_ENV"
+          echo "IMAGE_SHA256=$DIGEST" >> "$GITHUB_ENV"
+      # Signed SLSA provenance links this exact digest to this commit and workflow run; stored by GitHub, never a long-lived key.
+      - name: Attest build provenance
+        if: inputs.image_digest == ''
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE_NAME }}
+          subject-digest: ${{ env.IMAGE_SHA256 }}
+      - name: Verify build provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh attestation verify "oci://$IMAGE_DIGEST" --repo "$GITHUB_REPOSITORY" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/deploy-gcp.yml"
+      - name: Summarize image vulnerabilities
+        env:
+          PYTHONPATH: ${{ github.workspace }}/platform
+          BLOCK_ON_CRITICAL_VULNERABILITIES: ${{ vars.BLOCK_ON_CRITICAL_VULNERABILITIES || 'false' }}
+        run: python -m labdeploy.scan
+      - name: Deploy, probe, promote; restore traffic on failure
+        id: release
+        env:
+          PYTHONPATH: ${{ github.workspace }}/platform
+          SPEC_FILE: bundle/platform.yaml
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m labdeploy.release
+          echo "url=$(python -c 'import json; print(json.load(open("release-receipt.json")).get("url", ""))')" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: release-receipt
+          path: |
+            release-receipt.json
+            vulnerability-summary.json
+          if-no-files-found: warn
+          retention-days: 30
+  notify:
+    # Posts the outcome to the NOTIFY_WEBHOOK_URL secret (Slack or Discord incoming webhook) when it is set; silent otherwise.
+    needs: [build, deploy]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    env:
+      BUILD_RESULT: ${{ needs.build.result }}
+      DEPLOY_RESULT: ${{ needs.deploy.result }}
+      WEBHOOK: ${{ secrets.NOTIFY_WEBHOOK_URL }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      REPOSITORY: ${{ github.repository }}
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        continue-on-error: true
+        with:
+          name: release-receipt
+          path: receipt
+      - name: Post the result
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$WEBHOOK" ]; then
+            echo "NOTIFY_WEBHOOK_URL is not set; no notification sent"
+            exit 0
+          fi
+          python3 - <<'PY'
+          import json, os, urllib.request
+          receipt = {}
+          try:
+              receipt = json.load(open("receipt/release-receipt.json"))
+          except (OSError, ValueError):
+              pass
+          plan, commit = os.environ["PLAN_ID"], os.environ["COMMIT_SHA"][:12]
+          build, deploy = os.environ["BUILD_RESULT"], os.environ["DEPLOY_RESULT"]
+          if deploy == "success" and receipt.get("state") == "succeeded":
+              line = f"SUCCEEDED: revision {receipt.get('revision')} serves all traffic at {receipt.get('url')}"
+          elif build not in ("success", "skipped"):
+              line = f"FAILED in the build job ({build}): tests, dependency audit or image build"
+          elif receipt.get("state") == "traffic_restored":
+              line = f"FAILED: the candidate did not pass ({receipt.get('error')}); traffic was restored to the previous revision"
+          elif receipt.get("state") == "rollback_failed_manual_recovery_required":
+              line = f"FAILED AND NOT RESTORED: {receipt.get('restore_error')}; run the recovery workflow now"
+          elif deploy == "cancelled":
+              line = f"CANCELLED at phase '{receipt.get('state', 'unknown')}'; the recovery workflow checks the checkpoint"
+          else:
+              line = f"FAILED in the deploy job ({deploy}) at phase '{receipt.get('state', 'before the release step')}'"
+          text = f"Lab Deploy, {os.environ['REPOSITORY']}, plan {plan[:8]} (commit {commit}): {line}. {os.environ['RUN_URL']}"
+          body = json.dumps({"text": text, "content": text}).encode()
+          request = urllib.request.Request(os.environ["WEBHOOK"], data=body, headers={"Content-Type": "application/json"})
+          with urllib.request.urlopen(request, timeout=20) as response:  # noqa: S310 - operator-configured webhook secret
+              print("notification sent:", response.status)
+          PY
+
