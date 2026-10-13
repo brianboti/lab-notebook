@@ -28,3 +28,4 @@ form.danger button { background: #b42318; border-color: #b42318; }
 .notes { white-space: pre-wrap; background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: .8rem; }
 dl { display: grid; grid-template-columns: max-content 1fr; gap: .4rem 1rem; }
 dt { font-weight: 600; }
+.tag { font-size: .8rem; color: var(--muted); text-decoration: none; }

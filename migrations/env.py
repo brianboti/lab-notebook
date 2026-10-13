@@ -11,10 +11,13 @@ logging.basicConfig(stream=sys.stdout, level=logging.INFO, format="%(levelname)s
 
 
 def run_migrations_online() -> None:
-    with db.engine().connect() as connection:
-        context.configure(connection=connection, target_metadata=Base.metadata, compare_type=True)
-        with context.begin_transaction():
-            context.run_migrations()
+    try:
+        with db.engine().connect() as connection:
+            context.configure(connection=connection, target_metadata=Base.metadata, compare_type=True)
+            with context.begin_transaction():
+                context.run_migrations()
+    finally:
+        db.reset()  # closes the Cloud SQL connector's session, so the job ends without an "Unclosed client session" error
 
 
 if context.is_offline_mode():

@@ -22,6 +22,7 @@ class Experiment(Base):
     description: Mapped[str] = mapped_column(Text, default="")
     status: Mapped[str] = mapped_column(String(20), default="planned")
     owner: Mapped[str] = mapped_column(String(320))
+    tags: Mapped[str] = mapped_column(String(200), default="", server_default="")
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     attachments: Mapped[list["Attachment"]] = relationship(
         back_populates="experiment", cascade="all, delete-orphan", order_by="Attachment.id"

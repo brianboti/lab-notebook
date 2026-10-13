@@ -16,6 +16,7 @@ from app import config
 _lock = threading.Lock()
 _engine: Engine | None = None
 _sessions: sessionmaker | None = None
+_connector = None  # the Cloud SQL connector holds an HTTP session; close it with the engine
 
 
 def make_engine(settings: config.Settings) -> Engine:
@@ -26,8 +27,9 @@ def make_engine(settings: config.Settings) -> Engine:
     if settings.database_instance:
         from google.cloud.sql.connector import Connector, IPTypes
 
+        global _connector
         # Lazy refresh: Cloud Run gives CPU only during requests, so background certificate refreshes would stall.
-        connector = Connector(
+        connector = _connector = Connector(
             ip_type=IPTypes.PRIVATE if settings.database_ip_type == "private" else IPTypes.PUBLIC,
             enable_iam_auth=True,
             refresh_strategy="lazy",
@@ -61,9 +63,11 @@ def session() -> Session:
 
 
 def reset() -> None:
-    """Forget the engine, so the next use reads the environment again (tests)."""
-    global _engine, _sessions
+    """Close the engine and the connector, so the next use reads the environment again (tests, the end of a migration)."""
+    global _engine, _sessions, _connector
     with _lock:
         if _engine is not None:
             _engine.dispose()
-        _engine = _sessions = None
+        if _connector is not None:
+            _connector.close()
+        _engine = _sessions = _connector = None

@@ -107,19 +107,30 @@ def load_experiment(session: Session, experiment_id: int) -> Experiment:
 
 def as_dict(experiment: Experiment, attachments: bool = False) -> dict:
     data = {"id": experiment.id, "title": experiment.title, "description": experiment.description,
-            "status": experiment.status, "owner": experiment.owner, "created_at": experiment.created_at.isoformat()}
+            "status": experiment.status, "owner": experiment.owner, "tags": tag_list(experiment.tags),
+            "created_at": experiment.created_at.isoformat()}
     if attachments:
         data["attachments"] = [{"id": a.id, "filename": a.filename, "content_type": a.content_type, "size": a.size,
                                 "uploaded_by": a.uploaded_by} for a in experiment.attachments]
     return data
 
 
-def create(title: str, description: str, owner: str) -> Experiment:
+def tag_list(tags: str) -> list[str]:
+    return [tag for tag in tags.split(",") if tag]
+
+
+def clean_tags(raw: str | list[str]) -> str:
+    items = raw if isinstance(raw, list) else raw.split(",")
+    tags = sorted({re.sub(r"[^a-z0-9-]", "", item.strip().lower())[:30] for item in items} - {""})
+    return ",".join(tags)[:200]
+
+
+def create(title: str, description: str, owner: str, tags: str | list[str] = "") -> Experiment:
     title, description = title.strip(), description.strip()
     if not title or len(title) > 200:
         raise HTTPException(422, "A title of 1 to 200 characters is required")
     with db.session() as session:
-        experiment = Experiment(title=title, description=description, owner=owner)
+        experiment = Experiment(title=title, description=description, owner=owner, tags=clean_tags(tags))
         session.add(experiment)
         session.commit()
     backends.events.publish("experiment.created", f"#{experiment.id} {title}", owner)
@@ -160,7 +171,7 @@ def index(request: Request):
 
 
 @app.get("/experiments", response_class=HTMLResponse)
-def experiments(request: Request, q: str = "", status: str = ""):
+def experiments(request: Request, q: str = "", status: str = "", tag: str = ""):
     query = select(Experiment).order_by(Experiment.id.desc()).limit(100)
     if q:
         like = f"%{q.strip()}%"
@@ -169,7 +180,9 @@ def experiments(request: Request, q: str = "", status: str = ""):
         query = query.where(Experiment.status == status)
     with db.session() as session:
         found = session.scalars(query).all()
-    return page(request, "experiments.html", experiments=found, q=q, status=status, statuses=STATUSES)
+    if tag:
+        found = [e for e in found if tag in tag_list(e.tags)]
+    return page(request, "experiments.html", experiments=found, q=q, status=status, statuses=STATUSES, tag=tag)
 
 
 @app.get("/experiments/new", response_class=HTMLResponse)
@@ -178,8 +191,9 @@ def new_experiment(request: Request):
 
 
 @app.post("/experiments")
-def create_from_form(request: Request, title: Annotated[str, Form()], description: Annotated[str, Form()] = ""):
-    experiment = create(title, description, current_user(request))
+def create_from_form(request: Request, title: Annotated[str, Form()], description: Annotated[str, Form()] = "",
+                     tags: Annotated[str, Form()] = ""):
+    experiment = create(title, description, current_user(request), tags)
     return RedirectResponse(f"/experiments/{experiment.id}", status_code=303)
 
 
@@ -290,6 +304,7 @@ def identity(request: Request) -> dict:
 class ExperimentIn(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     description: str = Field("", max_length=10000)
+    tags: list[str] = Field(default_factory=list, max_length=10)
 
 
 @app.get("/api/stats")
@@ -313,7 +328,7 @@ def api_list(limit: int = 50):
 @app.post("/api/experiments", status_code=201)
 def api_create(request: Request, body: ExperimentIn):
     require_api_key(request, backends.settings.api_key)
-    return as_dict(create(body.title, body.description, current_user(request)))
+    return as_dict(create(body.title, body.description, current_user(request), body.tags))
 
 
 @app.get("/api/experiments/{experiment_id}")

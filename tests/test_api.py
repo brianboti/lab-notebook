@@ -46,3 +46,8 @@ def test_whoami_reports_identity_and_backends_without_secrets(client):
     assert info["storage"] == "in memory" and info["api_key_configured"] is True
     assert "test-key" not in json.dumps(info)
     assert client.get("/api/whoami").json()["user"] == "anonymous"
+
+
+def test_api_tags(client):
+    created = client.post("/api/experiments", json={"title": "Tagged", "tags": ["Gel", "gel", "blot"]}, headers=KEY).json()
+    assert created["tags"] == ["blot", "gel"]

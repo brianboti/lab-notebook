@@ -3,6 +3,7 @@
 {% block content %}
 <h1>{{ experiment.title }} <span class="badge {{ experiment.status }}">{{ experiment.status }}</span></h1>
 <p class="muted">#{{ experiment.id }} · by {{ experiment.owner }} · {{ experiment.created_at.strftime("%Y-%m-%d %H:%M") }}</p>
+{% if experiment.tags %}<p>{% for t in experiment.tags.split(",") %}<a class="tag" href="/experiments?tag={{ t }}">#{{ t }}</a> {% endfor %}</p>{% endif %}
 {% if experiment.description %}<p class="notes">{{ experiment.description }}</p>{% endif %}
 
 <form class="inline" method="post" action="/experiments/{{ experiment.id }}/status">

@@ -71,3 +71,13 @@ def test_only_the_owner_may_delete(client):
 
 def test_unknown_experiment_is_404(client):
     assert client.get("/experiments/999").status_code == 404
+
+
+def test_tags_are_cleaned_saved_and_filterable(client):
+    location = client.post("/experiments", data={"title": "OCT run", "tags": "Retina, oct ,OCT, b@d!"}, headers=IAP,
+                           follow_redirects=False).headers["location"]
+    page = client.get(location, headers=IAP).text
+    assert "#oct" in page and "#retina" in page and "#bd" in page
+    client.post("/experiments", data={"title": "Other"}, headers=IAP)
+    filtered = client.get("/experiments", params={"tag": "retina"}).text
+    assert "OCT run" in filtered and "Other" not in filtered

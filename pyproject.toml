@@ -1,6 +1,6 @@
 [project]
 name = "lab-notebook"
-version = "1.0.0"
+version = "1.1.0"
 description = "Experiments, attachments and an activity feed for the lab, deployed by Lab Deploy"
 requires-python = ">=3.12"
 license = "MIT"

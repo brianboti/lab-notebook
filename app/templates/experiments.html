@@ -17,7 +17,7 @@
   {% for e in experiments %}
     <tr>
       <td>{{ e.id }}</td>
-      <td><a href="/experiments/{{ e.id }}">{{ e.title }}</a></td>
+      <td><a href="/experiments/{{ e.id }}">{{ e.title }}</a>{% for t in e.tags.split(",") if t %} <a class="tag" href="/experiments?tag={{ t }}">#{{ t }}</a>{% endfor %}</td>
       <td><span class="badge {{ e.status }}">{{ e.status }}</span></td>
       <td>{{ e.owner }}</td>
       <td class="muted">{{ e.created_at.strftime("%Y-%m-%d %H:%M") }}</td>
