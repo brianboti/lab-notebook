@@ -3,11 +3,11 @@ name: lab-notebook
 runtime: python-http
 port: 8080
 health_path: /health
-resources: { cpu: 4, memory_mib: 512 }
+resources: { cpu: 1, memory_mib: 512 }
 scaling: { minimum: 0, maximum: 2 }
 concurrency: 40
 timeout_seconds: 60
-exposure: authenticated
+exposure: public
 state: stateless
 env:
   APP_TITLE: Lab Notebook
