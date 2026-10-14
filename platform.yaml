@@ -18,6 +18,6 @@ tests: required
 needs:
   buckets: [uploads]
   topics: [events]
-  database: postgres
-  migrate: [alembic, upgrade, head]
+  database: none          # the test's Postgres instance was retired on 2026-10-13
+  migrate: []
 reviewed: true
