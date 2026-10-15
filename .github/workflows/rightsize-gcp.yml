@@ -35,6 +35,7 @@ jobs:
       WIF_PROVIDER: ${{ vars.WIF_PROVIDER }}
       RECOVERY_BUCKET: ${{ vars.RECOVERY_BUCKET }}
       WINDOW_DAYS: ${{ inputs.window_days || '14' }}
+      APP_PATH: .  # the service's folder in its repository, where platform.yaml lives
     steps:
       - name: Validate inputs
         shell: bash
@@ -45,7 +46,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: brianboti/lab-deploy
-          ref: c7fb63656fe6da0b96af6a6303e6a0e187ffbdbf
+          ref: 0e7802a81e5e0afebaf53232cb778fda772fd074
           persist-credentials: false
           path: platform
           token: ${{ secrets.PLATFORM_READ_TOKEN || github.token }}
@@ -67,6 +68,7 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}/platform
           GH_TOKEN: ${{ github.token }}
           BILLING_EXPORT_TABLE: ${{ vars.BILLING_EXPORT_TABLE }}
+          ONBOARDING_SUMMARY: ${{ vars.ONBOARDING_SUMMARY }}
         run: python -m labdeploy.cost
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
