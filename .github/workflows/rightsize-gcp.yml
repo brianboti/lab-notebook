@@ -24,6 +24,7 @@ jobs:
       contents: read
       id-token: write
       issues: write
+      actions: read  # the month's runs and jobs, for this repository's billable Actions minutes in the report
     env:
       GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
       GCP_REGION: ${{ vars.GCP_REGION }}
@@ -44,7 +45,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: brianboti/lab-deploy
-          ref: b269080943a19c41de86cdaa39e5118f041608fb
+          ref: c7fb63656fe6da0b96af6a6303e6a0e187ffbdbf
           persist-credentials: false
           path: platform
           token: ${{ secrets.PLATFORM_READ_TOKEN || github.token }}
