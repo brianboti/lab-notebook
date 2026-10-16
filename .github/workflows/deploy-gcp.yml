@@ -81,8 +81,8 @@ jobs:
           path: app
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: brianboti/lab-deploy
-          ref: 0e7802a81e5e0afebaf53232cb778fda772fd074
+          repository: brianboti/fast-deploy
+          ref: 65b325a2c0150b21ac72297d2550219a65e8279b
           persist-credentials: false
           path: platform
           # For a private platform repo: read-only fine-grained token or App token.
@@ -286,8 +286,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: brianboti/lab-deploy
-          ref: 0e7802a81e5e0afebaf53232cb778fda772fd074
+          repository: brianboti/fast-deploy
+          ref: 65b325a2c0150b21ac72297d2550219a65e8279b
           persist-credentials: false
           path: platform
           token: ${{ secrets.PLATFORM_READ_TOKEN || github.token }}
@@ -540,7 +540,7 @@ jobs:
               line = f"CANCELLED at phase '{receipt.get('state', 'unknown')}'; the recovery workflow checks the checkpoint"
           else:
               line = f"FAILED in the deploy job ({deploy}) at phase '{receipt.get('state', 'before the release step')}'"
-          text = f"Lab Deploy, {os.environ['REPOSITORY']}, plan {plan[:8]} (commit {commit}): {line}. {os.environ['RUN_URL']}"
+          text = f"Fast Deploy, {os.environ['REPOSITORY']}, plan {plan[:8]} (commit {commit}): {line}. {os.environ['RUN_URL']}"
           body = json.dumps({"text": text, "content": text}).encode()
           request = urllib.request.Request(os.environ["WEBHOOK"], data=body, headers={"Content-Type": "application/json"})
           with urllib.request.urlopen(request, timeout=20) as response:  # noqa: S310 - operator-configured webhook secret
