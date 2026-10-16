@@ -51,8 +51,8 @@ jobs:
       # Never check out or execute code from the triggering application workflow.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: brianboti/lab-deploy
-          ref: 0e7802a81e5e0afebaf53232cb778fda772fd074
+          repository: brianboti/fast-deploy
+          ref: 65b325a2c0150b21ac72297d2550219a65e8279b
           persist-credentials: false
           path: platform
           token: ${{ secrets.PLATFORM_READ_TOKEN || github.token }}
@@ -127,7 +127,7 @@ jobs:
               line = f"ROLLBACK FAILED ({result}); traffic was not changed, inspect the run log"
           else:
               line = f"RECOVERY FAILED ({result}); inspect the checkpoint and Cloud Run now"
-          text = f"Lab Deploy, {os.environ['REPOSITORY']}: {line}. {os.environ['RUN_URL']}"
+          text = f"Fast Deploy, {os.environ['REPOSITORY']}: {line}. {os.environ['RUN_URL']}"
           body = json.dumps({"text": text, "content": text}).encode()
           request = urllib.request.Request(os.environ["WEBHOOK"], data=body, headers={"Content-Type": "application/json"})
           with urllib.request.urlopen(request, timeout=20) as response:  # noqa: S310 - operator-configured webhook secret
