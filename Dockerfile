@@ -1,6 +1,6 @@
 # python:3.12-slim multi-arch index digest resolved 2026-10-11. Refresh deliberately after review with:
 #   docker buildx imagetools inspect python:3.12-slim
-FROM python:3.12-slim@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1
+FROM python:3.15-slim@sha256:2da676046630d7bf14c6764ae1143dc7fa0377a53f94bf5a642f0b214aca5bce
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 WORKDIR /app
 COPY requirements.lock .
