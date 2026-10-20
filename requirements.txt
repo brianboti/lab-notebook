@@ -1,6 +1,6 @@
 # Runtime dependencies at exact versions (audited on every release). requirements.lock holds the full tree with hashes.
 alembic==1.20.0
-cloud-sql-python-connector==1.22.0
+cloud-sql-python-connector==1.23.0
 fastapi==0.143.0
 google-cloud-pubsub==2.42.0
 google-cloud-storage==3.17.0
