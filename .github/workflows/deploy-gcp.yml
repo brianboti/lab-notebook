@@ -87,7 +87,7 @@ jobs:
           path: platform
           # For a private platform repo: read-only fine-grained token or App token.
           token: ${{ secrets.PLATFORM_READ_TOKEN || github.token }}
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.12'
       - name: Install trusted platform dependencies
@@ -124,7 +124,7 @@ jobs:
           [ "$TESTS" = "required" ] || echo "::warning::platform.yaml declares tests: none; no automated tests guard this release"
       # The application's own Python (platform.yaml `python`) for its tests and its dependency audit; the platform's steps
       # keep theirs on PATH.
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         id: app-python
         with:
           python-version: ${{ steps.policy.outputs.python }}
@@ -291,7 +291,7 @@ jobs:
           persist-credentials: false
           path: platform
           token: ${{ secrets.PLATFORM_READ_TOKEN || github.token }}
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.12'
       - run: python -m pip install --require-hashes -r platform/requirements.lock
